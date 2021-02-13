@@ -28,6 +28,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
+#include <limits.h>
 #ifdef HAVE_SYS_PARAM_H
 #include <sys/param.h>
 #else
@@ -382,7 +383,7 @@ grabdate(const char *s, int64_t *t)
     }
     if (regexec(&r, s, 10, matches, 0) == 0) {
         (void) memset(&tm, 0x0, sizeof(tm));
-        tm.tm_year = (int) strtol(&s[(int) matches[1].rm_so], NULL, 10);
+        tm.tm_year = (int) strtol(&s[(int) matches[1].rm_so], NULL, 10) - 1900;
         tm.tm_mon = (int) strtol(&s[(int) matches[2].rm_so], NULL, 10) - 1;
         tm.tm_mday = (int) strtol(&s[(int) matches[3].rm_so], NULL, 10);
         *t = mktime(&tm);
@@ -398,7 +399,7 @@ grabdate(const char *s, int64_t *t)
 
     if (std::regex_search(input, result, re)) {
         (void) memset(&tm, 0x0, sizeof(tm));
-        tm.tm_year = (int) strtol(result[1].str().c_str(), NULL, 10);
+        tm.tm_year = (int) strtol(result[1].str().c_str(), NULL, 10) - 1900;
         tm.tm_mon = (int) strtol(result[2].str().c_str(), NULL, 10) - 1;
         tm.tm_mday = (int) strtol(result[3].str().c_str(), NULL, 10);
         *t = mktime(&tm);
@@ -408,35 +409,52 @@ grabdate(const char *s, int64_t *t)
     return false;
 }
 
-uint64_t
-get_expiration(const char *s)
+int
+get_expiration(const char *s, uint32_t *res)
 {
-    uint64_t    now;
-    int64_t     t;
-    const char *mult;
-
     if (!s || !strlen(s)) {
-        return 0;
+        return -1;
     }
-    now = (uint64_t) strtoull(s, NULL, 10);
+    uint64_t delta;
+    int64_t  t;
+    if (grabdate(s, &t)) {
+        time_t now = time(NULL);
+        if (t > now) {
+            delta = t - now;
+            if (delta > UINT_MAX) {
+                return -3;
+            }
+            *res = delta;
+            return 0;
+        }
+        return -2;
+    }
+    delta = (uint64_t) strtoul(s, NULL, 10);
+    const char *mult;
     if ((mult = strchr("hdwmy", s[strlen(s) - 1])) != NULL) {
         switch (*mult) {
         case 'h':
-            return now * 60 * 60;
+            delta *= 60 * 60;
+            break;
         case 'd':
-            return now * 60 * 60 * 24;
+            delta *= 60 * 60 * 24;
+            break;
         case 'w':
-            return now * 60 * 60 * 24 * 7;
+            delta *= 60 * 60 * 24 * 7;
+            break;
         case 'm':
-            return now * 60 * 60 * 24 * 31;
+            delta *= 60 * 60 * 24 * 31;
+            break;
         case 'y':
-            return now * 60 * 60 * 24 * 365;
+            delta *= 60 * 60 * 24 * 365;
+            break;
         }
     }
-    if (grabdate(s, &t)) {
-        return t;
+    if (delta > UINT_MAX) {
+        return -3;
     }
-    return (uint64_t) strtoll(s, NULL, 10);
+    *res = delta;
+    return 0;
 }
 
 int64_t
