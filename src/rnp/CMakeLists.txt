@@ -54,9 +54,7 @@ add_executable(rnp
   rnp.cpp
   fficli.cpp
   ../rnpkeys/tui.cpp
-  ../lib/logging.cpp
   rnpcfg.cpp
-  $<TARGET_OBJECTS:rnp-common>
 )
 
 target_include_directories(rnp
